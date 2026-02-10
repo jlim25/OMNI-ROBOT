@@ -53,3 +53,14 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Generated files
+Debug/
+Release/
+.vscode/
+.settings/
+
+# IDE files
+.project
+.mxproject
+.cproject
