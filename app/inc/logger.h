@@ -20,7 +20,7 @@ typedef enum {
 
 void logger_init(void);
 void logger_log(log_level_t level, const char *fmt, ...);
-void logger_task(void *argument);
+void loggerTask(void const *argument);
 
 #define LOG_DEBUG(fmt, ...)    logger_log(LOG_LEVEL_DEBUG,   fmt, ##__VA_ARGS__)
 #define LOG_INFO(fmt, ...)     logger_log(LOG_LEVEL_INFO,    fmt, ##__VA_ARGS__)

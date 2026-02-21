@@ -17,13 +17,22 @@
 #define LOG_TX_BUF_SIZE         256   // scratch buffer for one transmission
 #define LOG_TASK_PERIOD_MS      10    // how often the task polls (ms)
 
+#define UART_TIMEOUT_MS         100  // Timeout for UART transmission (ms)
+
 /* ── Private variables ─────────────────────────────────────────── */
 static StreamBufferHandle_t s_logStream = NULL;
 
 /* ── Logger task ───────────────────────────────────────────────── */
-void loggerTask(void *argument)
+void loggerTask(void const *argument)
 {
     static uint8_t txBuf[LOG_TX_BUF_SIZE];
+
+    if (s_logStream == NULL)
+    {
+        /* Should never happen, but just in case... */
+        configASSERT(0);
+        vTaskDelete(NULL);
+    }
 
     for (;;)
     {
@@ -36,7 +45,7 @@ void loggerTask(void *argument)
 
         if (bytes > 0)
         {
-            HAL_UART_Transmit(DEBUG_UART, txBuf, bytes, HAL_MAX_DELAY);
+            HAL_UART_Transmit(DEBUG_UART, txBuf, bytes, UART_TIMEOUT_MS);
         }
     }
 }
@@ -56,7 +65,7 @@ void logger_log(log_level_t level, const char *fmt, ...)
     static const char *levelStr[] = {
         ANSI_CYAN   "[DEBUG]" ANSI_RESET,
         ANSI_GREEN  "[INFO] " ANSI_RESET,
-        ANSI_YELLOW "[WARN] " ANSI_RESET,
+        ANSI_YELLOW "[WARNING] " ANSI_RESET,
         ANSI_RED    "[ERROR]" ANSI_RESET,
     };
 

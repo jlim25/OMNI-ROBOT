@@ -59,12 +59,6 @@ void MX_FREERTOS_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Retarget printf to DEBUG_UART
-int __io_putchar(int ch)
-{
-    HAL_UART_Transmit(DEBUG_UART, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-    return ch;
-}
 /* USER CODE END 0 */
 
 /**
