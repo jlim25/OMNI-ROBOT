@@ -3,6 +3,7 @@
 
 #include "main.h"
 #include "stdbool.h"
+#include "usart.h"
 
 /* PIN Definition */
 #define LED_PIN GPIO_PIN_3

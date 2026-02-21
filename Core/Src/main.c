@@ -22,11 +22,10 @@
 #include "can.h"
 #include "usart.h"
 #include "gpio.h"
-#include "bsp.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "bsp.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
