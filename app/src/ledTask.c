@@ -7,6 +7,7 @@
   */
 
 #include "debug.h"
+#include "logger.h"
 
 void ledTask(void const * argument)
 {

@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "logger.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +49,7 @@
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 osThreadId ledTaskNameHandle;
+osThreadId loggerTaskNameHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -57,6 +58,7 @@ osThreadId ledTaskNameHandle;
 
 void StartDefaultTask(void const * argument);
 extern void ledTask(void const * argument);
+extern void loggerTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -95,7 +97,7 @@ void vApplicationGetIdleTaskMemory( StaticTask_t **ppxIdleTaskTCBBuffer, StackTy
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
-
+  logger_init();
   /* USER CODE END Init */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -123,6 +125,10 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(ledTaskName, ledTask, osPriorityLow, 0, 128);
   ledTaskNameHandle = osThreadCreate(osThread(ledTaskName), NULL);
 
+  /* definition and creation of loggerTaskName */
+  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 512);
+  loggerTaskNameHandle = osThreadCreate(osThread(loggerTaskName), NULL);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -139,6 +145,9 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+
+  LOG_INFO("=== OMNI-ROBOT booted ===\r\n");
+  LOG_INFO("FW built: %s %s\r\n", __DATE__, __TIME__);
   /* Infinite loop */
   for(;;)
   {
