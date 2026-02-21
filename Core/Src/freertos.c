@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "logger.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -145,6 +145,9 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+
+  LOG_INFO("=== OMNI-ROBOT booted ===\r\n");
+  LOG_INFO("FW built: %s %s\r\n", __DATE__, __TIME__);
   /* Infinite loop */
   for(;;)
   {
