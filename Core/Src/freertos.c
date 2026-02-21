@@ -50,6 +50,7 @@
 osThreadId defaultTaskHandle;
 osThreadId ledTaskNameHandle;
 osThreadId loggerTaskNameHandle;
+osThreadId servoMotorTaskNHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -59,6 +60,7 @@ osThreadId loggerTaskNameHandle;
 void StartDefaultTask(void const * argument);
 extern void ledTask(void const * argument);
 extern void loggerTask(void const * argument);
+extern void servoMotorTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -128,6 +130,10 @@ void MX_FREERTOS_Init(void) {
   /* definition and creation of loggerTaskName */
   osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 512);
   loggerTaskNameHandle = osThreadCreate(osThread(loggerTaskName), NULL);
+
+  /* definition and creation of servoMotorTaskN */
+  osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
+  servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

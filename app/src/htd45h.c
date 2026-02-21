@@ -242,24 +242,24 @@ htd_status_t HTD45H_MoveTimeWrite(htd45h_t *dev, uint8_t id,
     return st;
 }
 
-// htd_status_t HTD45H_SetTorque(htd45h_t *dev, uint8_t id, bool enable)
-// {
-//     if (!dev) return HTD_ERR_PARAM;
+htd_status_t HTD45H_EnableTorque(htd45h_t *dev, uint8_t id, bool enable)
+{
+    if (!dev) return HTD_ERR_PARAM;
 
-//     // SERVO_LOAD_OR_UNLOAD_WRITE (31) length=4 => 1 parameter: 0=unload, 1=load
-//     uint8_t prm[1];
-//     prm[0] = enable ? 1 : 0;
+    // SERVO_LOAD_OR_UNLOAD_WRITE (31) length=4 => 1 parameter: 0=unload, 1=load
+    uint8_t prm[1];
+    prm[0] = enable ? 1 : 0;
 
-//     htd_status_t st = htd_lock(dev);
-//     if (st != HTD_OK) return st;
+    htd_status_t st = htd_lock(dev);
+    if (st != HTD_OK) return st;
 
-//     st = htd_send_and_optional_read(dev, id, HTD_CMD_SERVO_LOAD_OR_UNLOAD_WRITE,
-//                                     prm, sizeof(prm),
-//                                     false, NULL, 0, NULL);
+    st = htd_send_and_optional_read(dev, id, HTD_CMD_SERVO_LOAD_OR_UNLOAD_WRITE,
+                                    prm, sizeof(prm),
+                                    false, NULL, 0, NULL);
 
-//     htd_unlock(dev);
-//     return st;
-// }
+    htd_unlock(dev);
+    return st;
+}
 
 static htd_status_t parse_and_check_reply(const uint8_t *rx, uint16_t rx_len,
                                           uint8_t expect_id, uint8_t expect_cmd,

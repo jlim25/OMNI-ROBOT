@@ -12,4 +12,9 @@
 /* UART Debug Channel */
 #define DEBUG_UART &huart2
 
+/* MOTOR UART */
+#define SERVO_UART &huart1
+#define SERVO_DIR_GPIO_Port GPIOB
+#define SERVO_DIR_Pin GPIO_PIN_4
+
 #endif /* __BSP_H */

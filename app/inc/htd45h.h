@@ -51,7 +51,7 @@ htd_status_t HTD45H_Init(htd45h_t *dev,
 htd_status_t HTD45H_MoveTimeWrite(htd45h_t *dev, uint8_t id,
                                   uint16_t pos_0_1000, uint16_t time_ms);
 
-htd_status_t HTD45H_SetTorque(htd45h_t *dev, uint8_t id, bool enable);
+htd_status_t HTD45H_EnableTorque(htd45h_t *dev, uint8_t id, bool enable);
 
 htd_status_t HTD45H_ReadPos(htd45h_t *dev, uint8_t id, int16_t *pos_out);
 htd_status_t HTD45H_ReadVin_mV(htd45h_t *dev, uint8_t id, uint16_t *mv_out);
