@@ -27,7 +27,7 @@ void servoMotorTask(void const *argument)
     HTD45H_EnableTorque(&servo, 1, true);
 
     uint16_t remainingStack = uxTaskGetStackHighWaterMark(NULL); // for debugging stack usage
-    LOG_DEBUG("Servo Motor Task Stack High Water Mark: %u\r\n", remainingStack);
+    // LOG_DEBUG("Servo Motor Task Stack High Water Mark: %u\r\n", remainingStack);
 
     while (1)
     {
