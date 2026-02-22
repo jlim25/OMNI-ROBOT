@@ -61,6 +61,5 @@ Release/
 .settings/
 
 # IDE files
-.project
 .mxproject
 .cproject
