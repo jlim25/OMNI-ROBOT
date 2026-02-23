@@ -24,6 +24,7 @@
 #include "FreeRTOS_CLI.h"
 #include "debug.h"
 #include "string.h"
+#include "logger.h"
 
 /* Maximum input line length (bytes including null terminator) */
 #define CLI_INPUT_BUF_LEN   64
@@ -45,6 +46,7 @@ void cliConsoleTask(void const *argument)
     uint16_t usInputLen = 0;
     uint8_t ucRxChar    = 0;
 
+    LOG_DEBUG("CLI console task started\r\n");
     /* Register all application commands before we start accepting input */
     CLI_RegisterAllCommands();
 
