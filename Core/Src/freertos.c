@@ -144,7 +144,6 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
   servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
 
-
   /* definition and creation of canRxTaskName */
   osThreadDef(canRxTaskName, canRxTask, osPriorityHigh, 0, 256);
   canRxTaskNameHandle = osThreadCreate(osThread(canRxTaskName), NULL);
