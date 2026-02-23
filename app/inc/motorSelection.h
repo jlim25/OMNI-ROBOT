@@ -40,12 +40,12 @@
 #if   MOTOR_SELECTION == MOTOR_JOINT_1
     #define MOTOR_ID    1
     #define MOTOR_SPEC  ((hiwonder_servo_spec_t)HTD_85H_SPEC)
-    #define MOTOR_NAME  "Joint-1 (240 deg)"
+    #define MOTOR_NAME  "Base-1 (240 deg)"
 
 #elif MOTOR_SELECTION == MOTOR_JOINT_2
     #define MOTOR_ID    2
     #define MOTOR_SPEC  ((hiwonder_servo_spec_t)HTD_85H_SPEC)
-    #define MOTOR_NAME  "Joint-2 (240 deg)"
+    #define MOTOR_NAME  "Base-2 (240 deg)"
 
 #elif MOTOR_SELECTION == MOTOR_JOINT_3
     #define MOTOR_ID    3
