@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "logger.h"
+#include "app_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,26 +46,28 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+#ifdef ENABLE_CLI
+osThreadId cliConsoleTaskNHandle;
+#endif
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
 osThreadId ledTaskNameHandle;
 osThreadId loggerTaskNameHandle;
 osThreadId servoMotorTaskNHandle;
-osThreadId cliConsoleTaskNHandle;
 osThreadId canRxTaskNameHandle;
 osThreadId canTxTaskNameHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+#ifdef ENABLE_CLI
+extern void cliConsoleTask(void const * argument);
+#endif
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
 extern void ledTask(void const * argument);
 extern void loggerTask(void const * argument);
 extern void servoMotorTask(void const * argument);
-extern void cliConsoleTask(void const * argument);
 extern void canRxTask(void const * argument);
 extern void canTxTask(void const * argument);
 
@@ -141,9 +144,6 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
   servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
 
-  /* definition and creation of cliConsoleTaskN */
-  osThreadDef(cliConsoleTaskN, cliConsoleTask, osPriorityLow, 0, 256);
-  cliConsoleTaskNHandle = osThreadCreate(osThread(cliConsoleTaskN), NULL);
 
   /* definition and creation of canRxTaskName */
   osThreadDef(canRxTaskName, canRxTask, osPriorityHigh, 0, 256);
@@ -155,6 +155,11 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  #ifdef ENABLE_CLI
+  /* definition and creation of cliConsoleTaskN */
+  osThreadDef(cliConsoleTaskN, cliConsoleTask, osPriorityLow, 0, 256);
+  cliConsoleTaskNHandle = osThreadCreate(osThread(cliConsoleTaskN), NULL);
+  #endif
   /* USER CODE END RTOS_THREADS */
 
 }

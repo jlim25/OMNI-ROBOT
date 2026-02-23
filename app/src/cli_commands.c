@@ -1,3 +1,6 @@
+#include "app_config.h"
+#ifdef ENABLE_CLI
+
 /**
   *****************************************************************************
   * @file    cli_commands.c
@@ -204,3 +207,5 @@ static BaseType_t prvStopCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
     }
     return pdFALSE;
 }
+
+#endif /* ENABLE_CLI */

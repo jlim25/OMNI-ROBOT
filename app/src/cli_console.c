@@ -1,3 +1,6 @@
+#include "app_config.h"
+#ifdef ENABLE_CLI
+
 /**
   *****************************************************************************
   * @file    cli_console.c
@@ -102,3 +105,5 @@ void cliConsoleTask(void const *argument)
         /* Characters beyond the buffer length are silently dropped */
     }
 }
+
+#endif /* ENABLE_CLI */

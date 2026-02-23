@@ -1,5 +1,7 @@
 #pragma once
 
+#include "app_config.h"
+
 /**
   *****************************************************************************
   * @file    cli_commands.h
@@ -11,8 +13,10 @@
   *****************************************************************************
   */
 
+#ifdef ENABLE_CLI
 /**
  * Register all application-defined CLI commands with FreeRTOS-Plus-CLI.
  * Call once during initialisation, before starting the CLI console task.
  */
 void CLI_RegisterAllCommands(void);
+#endif /* ENABLE_CLI */
