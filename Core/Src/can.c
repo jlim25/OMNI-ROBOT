@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
+#include "motorSelection.h"  // MOTOR_CAN_CMD_ID – compile-time per-motor filter ID
 
 /* USER CODE BEGIN 0 */
 
@@ -68,7 +69,7 @@ void MX_CAN_Init(void)
   sFilterConfig.FilterBank           = 0;
   sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
   sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
-  sFilterConfig.FilterIdHigh         = (OMNI_ROBOT_R_PI_COMMAND_FRAME_ID << 5) & 0xFFFFu;
+  sFilterConfig.FilterIdHigh         = (MOTOR_CAN_CMD_ID << 5) & 0xFFFFu;
   sFilterConfig.FilterIdLow          = 0x0000u;
   sFilterConfig.FilterMaskIdHigh     = (0x7FFu << 5) & 0xFFFFu;  // match all 11 ID bits
   sFilterConfig.FilterMaskIdLow      = 0x0004u;                    // require IDE=0

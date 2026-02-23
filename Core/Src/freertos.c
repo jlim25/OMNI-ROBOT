@@ -52,6 +52,8 @@ osThreadId ledTaskNameHandle;
 osThreadId loggerTaskNameHandle;
 osThreadId servoMotorTaskNHandle;
 osThreadId cliConsoleTaskNHandle;
+osThreadId canRxTaskNameHandle;
+osThreadId canTxTaskNameHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -63,6 +65,8 @@ extern void ledTask(void const * argument);
 extern void loggerTask(void const * argument);
 extern void servoMotorTask(void const * argument);
 extern void cliConsoleTask(void const * argument);
+extern void canRxTask(void const * argument);
+extern void canTxTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -140,6 +144,14 @@ void MX_FREERTOS_Init(void) {
   /* definition and creation of cliConsoleTaskN */
   osThreadDef(cliConsoleTaskN, cliConsoleTask, osPriorityLow, 0, 128);
   cliConsoleTaskNHandle = osThreadCreate(osThread(cliConsoleTaskN), NULL);
+
+  /* definition and creation of canRxTaskName */
+  osThreadDef(canRxTaskName, canRxTask, osPriorityHigh, 0, 256);
+  canRxTaskNameHandle = osThreadCreate(osThread(canRxTaskName), NULL);
+
+  /* definition and creation of canTxTaskName */
+  osThreadDef(canTxTaskName, canTxTask, osPriorityAboveNormal, 0, 256);
+  canTxTaskNameHandle = osThreadCreate(osThread(canTxTaskName), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
