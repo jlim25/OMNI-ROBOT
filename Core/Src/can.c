@@ -19,10 +19,9 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
-#include "motorSelection.h"  // MOTOR_CAN_CMD_ID – compile-time per-motor filter ID
 
 /* USER CODE BEGIN 0 */
-
+#include "motorSelection.h" // MOTOR_CAN_CMD_ID
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan;
