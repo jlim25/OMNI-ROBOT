@@ -13,7 +13,8 @@
 #include "debug.h"
 #include "logger.h"
 
-static hiwonder_servo_t servo;
+/* Non-static so cli_commands.c can reach this handle via extern */
+hiwonder_servo_t servo;
 static SemaphoreHandle_t servo_bus_mutex = NULL;
 
 void servoMotorTask(void const *argument)

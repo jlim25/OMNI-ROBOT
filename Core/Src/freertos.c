@@ -51,6 +51,7 @@ osThreadId defaultTaskHandle;
 osThreadId ledTaskNameHandle;
 osThreadId loggerTaskNameHandle;
 osThreadId servoMotorTaskNHandle;
+osThreadId cliConsoleTaskNHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -61,6 +62,7 @@ void StartDefaultTask(void const * argument);
 extern void ledTask(void const * argument);
 extern void loggerTask(void const * argument);
 extern void servoMotorTask(void const * argument);
+extern void cliConsoleTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -128,12 +130,16 @@ void MX_FREERTOS_Init(void) {
   ledTaskNameHandle = osThreadCreate(osThread(ledTaskName), NULL);
 
   /* definition and creation of loggerTaskName */
-  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 512);
+  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 256);
   loggerTaskNameHandle = osThreadCreate(osThread(loggerTaskName), NULL);
 
   /* definition and creation of servoMotorTaskN */
   osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
   servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
+
+  /* definition and creation of cliConsoleTaskN */
+  osThreadDef(cliConsoleTaskN, cliConsoleTask, osPriorityLow, 0, 128);
+  cliConsoleTaskNHandle = osThreadCreate(osThread(cliConsoleTaskN), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
