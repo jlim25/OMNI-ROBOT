@@ -8,3 +8,4 @@ with can.Bus() as bus:
     data = msg.encode({'TargetAngle_deg': 90.0, 'MoveDuration_ms': 1000,
                     'TorqueEnable': 1, 'StopCmd': 0})
     bus.send(can.Message(arbitration_id=msg.frame_id, data=data))
+    print("hi")
