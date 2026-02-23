@@ -62,3 +62,6 @@ Release/
 
 # IDE files
 .mxproject
+
+# Python
+uv.lock
