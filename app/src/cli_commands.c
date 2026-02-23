@@ -41,6 +41,8 @@ static BaseType_t prvReadPosCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                     const char *pcCommandString);
 static BaseType_t prvTorqueCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                    const char *pcCommandString);
+static BaseType_t prvStopCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
+                                 const char *pcCommandString);
 
 /* ── Command definitions ────────────────────────────────────────── */
 
@@ -70,6 +72,14 @@ static const CLI_Command_Definition_t xTorqueCommand = {
     1   /* on / off */
 };
 
+static const CLI_Command_Definition_t xStopCommand = {
+    "stop",
+    "\r\nstop:\r\n"
+    "  Immediately halt the servo at its current position.\r\n\r\n",
+    prvStopCommand,
+    0   /* no parameters */
+};
+
 /* ── Registration ───────────────────────────────────────────────── */
 
 void CLI_RegisterAllCommands(void)
@@ -77,6 +87,7 @@ void CLI_RegisterAllCommands(void)
     FreeRTOS_CLIRegisterCommand(&xMoveAngleCommand);
     FreeRTOS_CLIRegisterCommand(&xReadPosCommand);
     FreeRTOS_CLIRegisterCommand(&xTorqueCommand);
+    FreeRTOS_CLIRegisterCommand(&xStopCommand);
 }
 
 /* ── Servo handle (shared with servoMotor.c via extern) ─────────── */
@@ -161,5 +172,35 @@ static BaseType_t prvTorqueCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
              MOTOR_NAME ": torque %s%s\r\n",
              enable ? "enabled" : "disabled",
              st == HWSERVO_OK ? "" : " (FAILED)");
+    return pdFALSE;
+}
+
+static BaseType_t prvStopCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
+                                 const char *pcCommandString)
+{
+    (void)pcCommandString;
+
+    /* Read the current raw position, then immediately command the servo to
+     * hold that position with time_ms=0 (instantaneous).  This cancels any
+     * in-progress move without disabling torque, so the joint stays rigid. */
+    int16_t raw = 0;
+    hwservo_status_t st = HWSERVO_ReadPos_Raw(&servo, &raw);
+
+    if (st != HWSERVO_OK) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 MOTOR_NAME ": stop failed – could not read position (err %d)\r\n",
+                 (int)st);
+        return pdFALSE;
+    }
+
+    st = HWSERVO_MoveTimeWrite_Raw(&servo, (uint16_t)raw, 0);
+
+    if (st == HWSERVO_OK) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 MOTOR_NAME ": stopped at raw=%d\r\n", raw);
+    } else {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 MOTOR_NAME ": stop command failed (err %d)\r\n", (int)st);
+    }
     return pdFALSE;
 }
