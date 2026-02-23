@@ -38,11 +38,11 @@ void MX_CAN_Init(void)
 
   /* USER CODE END CAN_Init 1 */
   hcan.Instance = CAN;
-  hcan.Init.Prescaler = 16;
+  hcan.Init.Prescaler = 4;
   hcan.Init.Mode = CAN_MODE_NORMAL;
   hcan.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan.Init.TimeSeg1 = CAN_BS1_1TQ;
-  hcan.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan.Init.TimeSeg1 = CAN_BS1_13TQ;
+  hcan.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan.Init.TimeTriggeredMode = DISABLE;
   hcan.Init.AutoBusOff = DISABLE;
   hcan.Init.AutoWakeUp = DISABLE;
@@ -54,6 +54,43 @@ void MX_CAN_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN_Init 2 */
+
+  /* ── RX filter: pass only RPi_Command (standard ID 0xC8) ─────────
+   * 32-bit mask-mode filter on FIFO0.
+   * Layout of 32-bit filter register for standard frames:
+   *   [31:21] STID[10:0]  [20:3] unused  [2] IDE  [1] RTR  [0] 0
+   *
+   * FilterId  = id << 21
+   * FilterMask = 0x7FF << 21  (match all 11 ID bits)
+   *            | (1 << 2)     (require IDE=0 i.e. standard frame)
+   * ─────────────────────────────────────────────────────────────── */
+  CAN_FilterTypeDef sFilterConfig;
+  sFilterConfig.FilterBank           = 0;
+  sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
+  sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
+  sFilterConfig.FilterIdHigh         = (OMNI_ROBOT_R_PI_COMMAND_FRAME_ID << 5) & 0xFFFFu;
+  sFilterConfig.FilterIdLow          = 0x0000u;
+  sFilterConfig.FilterMaskIdHigh     = (0x7FFu << 5) & 0xFFFFu;  // match all 11 ID bits
+  sFilterConfig.FilterMaskIdLow      = 0x0004u;                    // require IDE=0
+  sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
+  sFilterConfig.FilterActivation     = CAN_FILTER_ENABLE;
+  if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* Enable RX FIFO0 message-pending interrupt */
+  if (HAL_CAN_ActivateNotification(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING)
+      != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /* Start the CAN peripheral */
+  if (HAL_CAN_Start(&hcan) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END CAN_Init 2 */
 
@@ -83,6 +120,9 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     GPIO_InitStruct.Alternate = GPIO_AF9_CAN;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    /* CAN interrupt Init */
+    HAL_NVIC_SetPriority(CAN_RX0_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(CAN_RX0_IRQn);
   /* USER CODE BEGIN CAN_MspInit 1 */
 
   /* USER CODE END CAN_MspInit 1 */
@@ -106,6 +146,8 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
     */
     HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11|GPIO_PIN_12);
 
+    /* CAN interrupt Deinit */
+    HAL_NVIC_DisableIRQ(CAN_RX0_IRQn);
   /* USER CODE BEGIN CAN_MspDeInit 1 */
 
   /* USER CODE END CAN_MspDeInit 1 */
