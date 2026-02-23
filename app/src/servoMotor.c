@@ -86,7 +86,7 @@ void servoMotorTask(void const *argument)
                 xSemaphoreGive(can_rx_mutex);
             }
         }
-
+#ifdef ENABLE_PUBLISH_STATUS
         /* ── Publish MCU_Status over CAN at fixed rate ──────────── */
         if ((xTaskGetTickCount() - xLastStatusTick) >=
             pdMS_TO_TICKS(SERVO_STATUS_PERIOD_MS))
@@ -115,7 +115,7 @@ void servoMotorTask(void const *argument)
 
             CAN_SendMcuStatus(&status);
         }
-
+#endif /* ENABLE_PUBLISH_STATUS */
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
