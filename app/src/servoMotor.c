@@ -25,6 +25,8 @@
 hiwonder_servo_t servo;
 static SemaphoreHandle_t servo_bus_mutex = NULL;
 
+#define ENABLE_PUBLISH_STATUS
+
 void servoMotorTask(void const *argument)
 {
     // Create mutex before initializing the servo driver
@@ -57,6 +59,10 @@ void servoMotorTask(void const *argument)
                 g_can_rx.fresh = false;
                 xSemaphoreGive(can_rx_mutex);
 
+                // LOG_DEBUG(MOTOR_NAME ": CAN RX – angle=%u, dur=%u ms, torque=%u, stop=%u\r\n",
+                //           cmd.target_angle_deg, cmd.move_duration_ms,
+                //           cmd.torque_enable, cmd.stop_cmd);
+                
                 if (cmd.stop_cmd)
                 {
                     /* Stop: command servo to hold its current position */
@@ -76,8 +82,8 @@ void servoMotorTask(void const *argument)
                         /* target_angle_deg raw value, scale=0.01 → degrees */
                         float deg = (float)cmd.target_angle_deg * 0.01f;
                         HWSERVO_MoveToAngle(&servo, deg, cmd.move_duration_ms);
-                        LOG_DEBUG(MOTOR_NAME ": CAN move %.1f deg, %u ms\r\n",
-                                  deg, cmd.move_duration_ms);
+                        // LOG_DEBUG(MOTOR_NAME ": MOTOR move %.1f deg, %u ms\r\n",
+                        //           deg, cmd.move_duration_ms);
                     }
                 }
             }
@@ -116,6 +122,6 @@ void servoMotorTask(void const *argument)
             CAN_SendMcuStatus(&status);
         }
 #endif /* ENABLE_PUBLISH_STATUS */
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(25));
     }
 }

@@ -21,4 +21,4 @@
  * Costs ~2.4 KB RAM:  512-word stack + 256-byte output buffer + UART buffer.
  * Disable in Release to reclaim that RAM on the 12 KB STM32F303K8.
  * ──────────────────────────────────────────────────────────────────────── */
-#define ENABLE_CLI
+// #define ENABLE_CLI
