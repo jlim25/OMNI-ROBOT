@@ -55,12 +55,12 @@ void MX_CAN_Init(void)
   }
   /* USER CODE BEGIN CAN_Init 2 */
 
-  /* ── RX filter: pass only RPi_Command (standard ID 0xC8) ─────────
+  /* ── RX filter: pass only MOTOR_CAN_CMD_ID standard ID ───────────
    * 32-bit mask-mode filter on FIFO0.
    * Layout of 32-bit filter register for standard frames:
    *   [31:21] STID[10:0]  [20:3] unused  [2] IDE  [1] RTR  [0] 0
    *
-   * FilterId  = id << 21
+   * FilterId  = id << 21   (id = MOTOR_CAN_CMD_ID from motorSelection.h)
    * FilterMask = 0x7FF << 21  (match all 11 ID bits)
    *            | (1 << 2)     (require IDE=0 i.e. standard frame)
    * ─────────────────────────────────────────────────────────────── */

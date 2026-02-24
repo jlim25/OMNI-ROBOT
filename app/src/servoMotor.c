@@ -43,7 +43,9 @@ void servoMotorTask(void const *argument)
 
     LOG_DEBUG("Servo task started: " MOTOR_NAME " (ID=%u)\r\n", MOTOR_ID);
 
+    static bool torque_enabled = false;
     HWSERVO_EnableTorque(&servo, true);
+    torque_enabled = true;
 
     TickType_t xLastStatusTick = xTaskGetTickCount();
 
@@ -76,6 +78,7 @@ void servoMotorTask(void const *argument)
                 {
                     /* Apply torque enable first */
                     HWSERVO_EnableTorque(&servo, cmd.torque_enable != 0u);
+                    torque_enabled = (cmd.torque_enable != 0u);
 
                     if (cmd.torque_enable)
                     {
@@ -117,7 +120,7 @@ void servoMotorTask(void const *argument)
                 status.joint_temp_c = temp;
             }
 
-            status.torque_enabled = 1u; // reflect actual state if tracked
+            status.torque_enabled = torque_enabled ? 1u : 0u;
 
             CAN_SendMcuStatus(&status);
         }
