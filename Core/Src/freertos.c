@@ -26,6 +26,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "logger.h"
+#include "app_config.h"
+#include "bsp.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,20 +47,28 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-
+#ifdef ENABLE_CLI
+osThreadId cliConsoleTaskNHandle;
+#endif
 /* USER CODE END Variables */
 osThreadId defaultTaskHandle;
-osThreadId ledTaskNameHandle;
 osThreadId loggerTaskNameHandle;
+osThreadId servoMotorTaskNHandle;
+osThreadId canRxTaskNameHandle;
+osThreadId canTxTaskNameHandle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
-
+#ifdef ENABLE_CLI
+extern void cliConsoleTask(void const * argument);
+#endif
 /* USER CODE END FunctionPrototypes */
 
 void StartDefaultTask(void const * argument);
-extern void ledTask(void const * argument);
 extern void loggerTask(void const * argument);
+extern void servoMotorTask(void const * argument);
+extern void canRxTask(void const * argument);
+extern void canTxTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -121,16 +131,34 @@ void MX_FREERTOS_Init(void) {
   osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-  /* definition and creation of ledTaskName */
-  osThreadDef(ledTaskName, ledTask, osPriorityLow, 0, 128);
-  ledTaskNameHandle = osThreadCreate(osThread(ledTaskName), NULL);
-
   /* definition and creation of loggerTaskName */
-  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 512);
+  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 256);
   loggerTaskNameHandle = osThreadCreate(osThread(loggerTaskName), NULL);
+
+  /* definition and creation of servoMotorTaskN */
+  osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
+  servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
+
+  /* definition and creation of canRxTaskName */
+  osThreadDef(canRxTaskName, canRxTask, osPriorityHigh, 0, 256);
+  canRxTaskNameHandle = osThreadCreate(osThread(canRxTaskName), NULL);
+
+  /* definition and creation of canTxTaskName */
+  osThreadDef(canTxTaskName, canTxTask, osPriorityAboveNormal, 0, 256);
+  canTxTaskNameHandle = osThreadCreate(osThread(canTxTaskName), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
+  #ifdef ENABLE_CLI
+  /* definition and creation of cliConsoleTaskN */
+  osThreadDef(cliConsoleTaskN, cliConsoleTask, osPriorityLow, 0, 128);
+  cliConsoleTaskNHandle = osThreadCreate(osThread(cliConsoleTaskN), NULL);
+  if (cliConsoleTaskNHandle == NULL) {
+      LOG_ERROR("Failed to create CLI console task\r\n");
+      // print out remaining heap size for debugging
+      LOG_ERROR("Free heap size: %u bytes\r\n", xPortGetFreeHeapSize());
+  }
+  #endif
   /* USER CODE END RTOS_THREADS */
 
 }
@@ -151,7 +179,8 @@ void StartDefaultTask(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-    osDelay(1);
+    HAL_GPIO_TogglePin(LED_GPIO_PORT, LED_PIN);
+    osDelay(1000);
   }
   /* USER CODE END StartDefaultTask */
 }

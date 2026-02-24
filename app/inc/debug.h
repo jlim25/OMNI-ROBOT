@@ -5,5 +5,6 @@
 #include "stdio.h"
 #include "bsp.h"
 #include "task.h"
+#include "semphr.h"
 
 #endif /* define(__DEBUG_H) */
