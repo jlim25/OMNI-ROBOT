@@ -132,11 +132,11 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of loggerTaskName */
-  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 128);
+  osThreadDef(loggerTaskName, loggerTask, osPriorityNormal, 0, 256);
   loggerTaskNameHandle = osThreadCreate(osThread(loggerTaskName), NULL);
 
   /* definition and creation of servoMotorTaskN */
-  osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 384);
+  osThreadDef(servoMotorTaskN, servoMotorTask, osPriorityHigh, 0, 512);
   servoMotorTaskNHandle = osThreadCreate(osThread(servoMotorTaskN), NULL);
 
   /* definition and creation of canRxTaskName */
