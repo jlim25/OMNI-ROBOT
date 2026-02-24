@@ -71,7 +71,7 @@ void MX_CAN_Init(void)
   sFilterConfig.FilterIdHigh         = (MOTOR_CAN_CMD_ID << 5) & 0xFFFFu;
   sFilterConfig.FilterIdLow          = 0x0000u;
   sFilterConfig.FilterMaskIdHigh     = (0x7FFu << 5) & 0xFFFFu;  // match all 11 ID bits
-  sFilterConfig.FilterMaskIdLow      = 0x0004u;                    // require IDE=0
+  sFilterConfig.FilterMaskIdLow      = 0x0006u;                    // require IDE=0 (bit2) and RTR=0 (bit1)
   sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
   sFilterConfig.FilterActivation     = CAN_FILTER_ENABLE;
   if (HAL_CAN_ConfigFilter(&hcan, &sFilterConfig) != HAL_OK)

@@ -41,6 +41,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
+    /* CAN_IT_RX_FIFO0_MSG_PENDING is level-triggered: it stays asserted while
+     * the FIFO is non-empty.  Disable it here so the ISR does not re-fire
+     * continuously before canRxTask has a chance to drain the FIFO.
+     * canRxTask re-enables it after draining. */
+    __HAL_CAN_DISABLE_IT(hcan, CAN_IT_RX_FIFO0_MSG_PENDING);
+
     if (s_canRxTaskHandle != NULL) {
         vTaskNotifyGiveFromISR(s_canRxTaskHandle, &xHigherPriorityTaskWoken);
     }
@@ -68,7 +74,7 @@ void canRxTask(void const *argument)
         /* Block indefinitely until the ISR fires */
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        /* Drain all pending frames (ISR fires once per message) */
+        /* Drain all pending frames */
         while (HAL_CAN_GetRxFifoFillLevel(&hcan, CAN_RX_FIFO0) > 0u)
         {
             if (HAL_CAN_GetRxMessage(&hcan, CAN_RX_FIFO0,
@@ -98,6 +104,10 @@ void canRxTask(void const *argument)
             }
             /* Add more else-if blocks here for other message IDs */
         }
+
+        /* FIFO is now empty – re-enable the interrupt so the next arriving
+         * message triggers the ISR again. */
+        __HAL_CAN_ENABLE_IT(&hcan, CAN_IT_RX_FIFO0_MSG_PENDING);
     }
 }
 
