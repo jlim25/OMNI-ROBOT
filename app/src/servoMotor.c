@@ -49,6 +49,8 @@ void servoMotorTask(void const *argument)
 
     TickType_t xLastStatusTick = xTaskGetTickCount();
 
+    uint16_t raw_pos = 100;  // increments by 100 each loop, wraps at 1000
+
     while (1)
     {
         /* ── Process incoming CAN command ───────────────────────── */

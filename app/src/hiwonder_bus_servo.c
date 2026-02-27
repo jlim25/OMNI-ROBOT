@@ -63,6 +63,9 @@ static hwservo_status_t tx_frame(hiwonder_servo_t *servo,
 {
     set_dir_tx(servo, true);
 
+    // Switch UART peripheral to transmit mode (half-duplex: TE=1, RE=0)
+    HAL_HalfDuplex_EnableTransmitter(servo->huart);
+
     // Brief settle time for the direction-controlled line driver
     for (volatile int i = 0; i < 200; i++) { __NOP(); }
 
@@ -73,6 +76,12 @@ static hwservo_status_t tx_frame(hiwonder_servo_t *servo,
 
     // Wait for the last bit to leave the shift register before switching to RX
     while (__HAL_UART_GET_FLAG(servo->huart, UART_FLAG_TC) == RESET) { }
+
+    // Switch to RX and flush the echo bytes: on a half-duplex bus the STM32
+    // receives its own transmitted bytes in the RX shift register.  If not
+    // drained here, they will be mistaken for the servo's reply.
+    set_dir_tx(servo, false);
+    HAL_HalfDuplex_EnableReceiver(servo->huart);
 
     return HWSERVO_OK;
 }
@@ -95,7 +104,8 @@ static hwservo_status_t rx_frame(hiwonder_servo_t *servo,
                                  uint8_t *out_buf, uint16_t out_max,
                                  uint16_t *out_len)
 {
-    set_dir_tx(servo, false);
+    // Direction switch and echo flush are already done at the end of tx_frame.
+    // Small settle before we start reading the actual servo reply.
     for (volatile int i = 0; i < 200; i++) { __NOP(); }
 
     // Hunt for the 0x55 0x55 header
@@ -147,14 +157,16 @@ static hwservo_status_t build_frame(uint8_t id, uint8_t cmd,
     if (total > out_max) return HWSERVO_ERR_PARAM;
 
     uint16_t i = 0;
-    out[i++] = 0x55;
-    out[i++] = 0x55;
-    out[i++] = id;
-    out[i++] = len;
-    out[i++] = cmd;
+    out[i++] = 0x55; // correct
+    out[i++] = 0x55; // correct
+    out[i++] = id; // correct
+    out[i++] = len; // includes its own byte // TODO: verify this
+    out[i++] = cmd; // correct
     for (uint8_t p = 0; p < nparams; p++) {
-        out[i++] = params[p];
+        out[i++] = params[p]; // nparams is correct
+        // params is correct
     }
+    // checksum seems correct
     out[i++] = calc_checksum(id, len, cmd, params, nparams);
 
     *out_len = i;
@@ -255,10 +267,11 @@ hwservo_status_t HWSERVO_MoveTimeWrite_Raw(hiwonder_servo_t *servo,
     if (time_ms > 30000)       return HWSERVO_ERR_PARAM;
 
     uint8_t prm[4];
-    prm[0] = (uint8_t)(pos_0_1000 & 0xFF);
-    prm[1] = (uint8_t)((pos_0_1000 >> 8) & 0xFF);
-    prm[2] = (uint8_t)(time_ms & 0xFF);
-    prm[3] = (uint8_t)((time_ms >> 8) & 0xFF);
+    prm[0] = (uint8_t)(pos_0_1000 & 0xFF); // low byte of position
+    prm[1] = (uint8_t)((pos_0_1000 >> 8) & 0xFF); // high byte of position
+    prm[2] = (uint8_t)(time_ms & 0xFF); // low byte of time
+    prm[3] = (uint8_t)((time_ms >> 8) & 0xFF); // high byte of time
+    // ^ correct
 
     hwservo_status_t st = bus_lock(servo);
     if (st != HWSERVO_OK) return st;
