@@ -21,14 +21,8 @@
 
 static inline void set_dir_tx(const hiwonder_servo_t *servo, bool tx)
 {
-    GPIO_PinState st;
-
-    if (servo->dir_tx_high) {
-        st = tx ? GPIO_PIN_SET : GPIO_PIN_RESET;
-    } else {
-        st = tx ? GPIO_PIN_RESET : GPIO_PIN_SET;
-    }
-
+    // Active-low: pull pin LOW to enable TX, HIGH for RX
+    GPIO_PinState st = tx ? GPIO_PIN_RESET : GPIO_PIN_SET;
     HAL_GPIO_WritePin(servo->dir_port, servo->dir_pin, st);
 }
 

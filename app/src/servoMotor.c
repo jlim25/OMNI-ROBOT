@@ -25,7 +25,8 @@
 hiwonder_servo_t servo;
 static SemaphoreHandle_t servo_bus_mutex = NULL;
 
-#define ENABLE_PUBLISH_STATUS
+// #define ENABLE_PUBLISH_STATUS
+#define ENABLE_MOTOR_TEST   // Temporary: test motor comms without CAN
 
 void servoMotorTask(void const *argument)
 {
@@ -44,6 +45,7 @@ void servoMotorTask(void const *argument)
     LOG_DEBUG("Servo task started: " MOTOR_NAME " (ID=%u)\r\n", MOTOR_ID);
 
     static bool torque_enabled = false;
+    static float test_deg = 0.0f;  /* used by ENABLE_MOTOR_TEST */
     HWSERVO_EnableTorque(&servo, true);
     torque_enabled = true;
 
@@ -53,6 +55,25 @@ void servoMotorTask(void const *argument)
 
     while (1)
     {
+#ifdef ENABLE_MOTOR_TEST
+        /* ── Temporary motor communication test (no CAN required) ──── */
+        HWSERVO_MoveToAngle(&servo, test_deg, 1000);
+        // LOG_DEBUG(MOTOR_NAME ": TEST cmd  -> %.1f deg\r\n", test_deg);
+
+        vTaskDelay(pdMS_TO_TICKS(1500));  // wait for motion to complete
+
+        int16_t actual_raw = 0;
+        if (HWSERVO_ReadPos_Raw(&servo, &actual_raw) == HWSERVO_OK) {
+            LOG_DEBUG(MOTOR_NAME ": TEST read <- %d raw\r\n", actual_raw);
+        } else {
+            LOG_DEBUG(MOTOR_NAME ": TEST readback FAILED\r\n");
+        }
+
+        test_deg += 20.0f;
+        if (test_deg > servo.spec.deg_max) {
+            test_deg = servo.spec.deg_min;
+        }
+#else
         /* ── Process incoming CAN command ───────────────────────── */
         if (can_rx_mutex != NULL &&
             xSemaphoreTake(can_rx_mutex, pdMS_TO_TICKS(2)) == pdTRUE)
@@ -128,5 +149,6 @@ void servoMotorTask(void const *argument)
         }
 #endif /* ENABLE_PUBLISH_STATUS */
         vTaskDelay(pdMS_TO_TICKS(25));
+#endif /* ENABLE_MOTOR_TEST */
     }
 }
