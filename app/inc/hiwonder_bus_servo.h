@@ -103,6 +103,23 @@ hwservo_status_t HWSERVO_Init(hiwonder_servo_t *servo,
                               uint8_t id,
                               hiwonder_servo_spec_t spec);
 
+/* ── Presence detection ────────────────────────────────────────── */
+
+/** Timeout used during bus scans – shorter than normal reads. */
+#define HWSERVO_PING_TIMEOUT_MS   25u
+
+/**
+ * Ping a servo to check whether it is present on the bus.
+ *
+ * Sends a Read-Voltage command (0x1B) using a short RX timeout
+ * (HWSERVO_PING_TIMEOUT_MS).  Returns HWSERVO_OK if the servo
+ * responds with a valid frame, or HWSERVO_ERR_TIMEOUT / HWSERVO_ERR_FRAME
+ * if it does not.
+ *
+ * The bus mutex is acquired internally.  Safe to call from any task.
+ */
+hwservo_status_t HWSERVO_Ping(hiwonder_servo_t *servo);
+
 /* ── Motion commands ───────────────────────────────────────────── */
 
 /**

@@ -222,6 +222,20 @@ static hwservo_status_t parse_reply(const uint8_t *rx, uint16_t rx_len,
 }
 
 /* ── Public API ────────────────────────────────────────────────── */
+
+hwservo_status_t HWSERVO_Ping(hiwonder_servo_t *servo)
+{
+    /* Temporarily shorten the RX timeout for fast scan, restore afterward. */
+    uint32_t saved_rx = servo->rx_timeout_ms;
+    servo->rx_timeout_ms = HWSERVO_PING_TIMEOUT_MS;
+
+    uint16_t mv_dummy = 0;
+    hwservo_status_t st = HWSERVO_ReadVin_mV(servo, &mv_dummy);
+
+    servo->rx_timeout_ms = saved_rx;
+    return st;
+}
+
 hwservo_status_t HWSERVO_Init(hiwonder_servo_t *servo,
                               UART_HandleTypeDef *huart,
                               GPIO_TypeDef *dir_port, uint16_t dir_pin,
