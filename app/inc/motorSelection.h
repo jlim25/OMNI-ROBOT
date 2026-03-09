@@ -78,3 +78,38 @@ extern const motor_config_t g_motor_configs[MOTOR_MAX];
  */
 extern volatile uint8_t g_active_motor_count;
 extern volatile bool    g_servo_present[MOTOR_MAX];
+
+/* ── Safety thresholds ───────────────────────────────────────────────── */
+#define MOTOR_VOLT_WARN_LOW_MV   6500u  /**< < this threshold → FAULT_CODE_VOLT_LOW  */
+#define MOTOR_VOLT_WARN_HIGH_MV  13000u  /**< > this threshold → FAULT_CODE_VOLT_HIGH */
+#define MOTOR_TEMP_WARN_C          65u  /**< > this threshold → FAULT_CODE_TEMP_WARN */
+#define MOTOR_TEMP_FAULT_C         75u  /**< > this threshold → FAULT_CODE_TEMP_FAULT, torque disabled */
+
+/* ── Fault codes (match MCU_Fault.FaultCode signal in DBC) ──────────── */
+#define FAULT_CODE_NONE        0u
+#define FAULT_CODE_VOLT_LOW    1u
+#define FAULT_CODE_VOLT_HIGH   2u
+#define FAULT_CODE_TEMP_WARN   3u
+#define FAULT_CODE_TEMP_FAULT  4u
+
+/* ── CAN IDs for fault reporting and clearing ────────────────────────── */
+#define MOTOR_FAULT_CAN_ID         OMNI_ROBOT_MCU_FAULT_FRAME_ID         /* 0x10F */
+#define MOTOR_FAULT_CLEAR_CAN_ID   OMNI_ROBOT_R_PI_FAULT_CLEAR_FRAME_ID /* 0x301 */
+
+/* ── Per-motor runtime state ─────────────────────────────────────────── */
+typedef enum {
+    MOTOR_STATE_ABSENT = 0,  /**< Not found during scan / never pinged */
+    MOTOR_STATE_ACTIVE,      /**< Present, torque enabled, accepting commands */
+    MOTOR_STATE_FAULT,       /**< Thermal/voltage fault; torque disabled */
+} motor_state_t;
+
+/** Written exclusively by servoMotorTask; may be read by other tasks. */
+extern volatile motor_state_t g_motor_state[MOTOR_MAX];
+
+/* ── Task-level state machine states ─────────────────────────────────── */
+typedef enum {
+    TASK_STATE_INIT          = 0,
+    TASK_STATE_SCANNING,      /**< motor_scan() in progress */
+    TASK_STATE_RUNNING,       /**< Normal operation */
+    TASK_STATE_RECONFIGURING, /**< Reconfig scan in progress */
+} servo_task_state_t;

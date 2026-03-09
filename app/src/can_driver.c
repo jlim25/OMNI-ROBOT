@@ -21,9 +21,10 @@
 #include "omni_robot.h"
 
 /* ── Shared RX state (one entry per motor slot) ─────────────────── */
-can_rx_state_t      g_can_rx[MOTOR_MAX]  = { 0 };
-can_reconfig_state_t g_can_reconfig      = { 0 };
-SemaphoreHandle_t    can_rx_mutex        = NULL;
+can_rx_state_t       g_can_rx[MOTOR_MAX]   = { 0 };
+can_reconfig_state_t  g_can_reconfig        = { 0 };
+can_fault_clear_state_t g_can_fault_clear   = { 0 };
+SemaphoreHandle_t     can_rx_mutex          = NULL;
 
 /* ── TX queue ───────────────────────────────────────────────────── */
 QueueHandle_t canTxQueue = NULL;
@@ -140,6 +141,28 @@ void canRxTask(void const *argument)
                     }
                 }
 
+                /* RPi_FaultClear (0x301): clear fault for a specific motor or all */
+                if (!matched &&
+                    rxHeader.StdId == MOTOR_FAULT_CLEAR_CAN_ID &&
+                    rxHeader.DLC   == OMNI_ROBOT_R_PI_FAULT_CLEAR_LENGTH)
+                {
+                    struct omni_robot_r_pi_fault_clear_t fc;
+                    if (omni_robot_r_pi_fault_clear_unpack(&fc, rxData,
+                                                           rxHeader.DLC) >= 0)
+                    {
+                        if (xSemaphoreTake(can_rx_mutex, pdMS_TO_TICKS(5))
+                            == pdTRUE)
+                        {
+                            g_can_fault_clear.motor_id = fc.motor_id;
+                            g_can_fault_clear.pending  = true;
+                            xSemaphoreGive(can_rx_mutex);
+                        }
+                        matched = true;
+                    } else {
+                        LOG_WARNING("CAN RX RPi_FaultClear unpack failed\r\n");
+                    }
+                }
+
                 if (!matched) {
                     LOG_WARNING("CAN RX unknown ID 0x%03lX\r\n",
                                 (unsigned long)rxHeader.StdId);
@@ -221,6 +244,29 @@ void CAN_SendMcuStatus(uint8_t motor_idx, const motor_status_t *status)
     }
 
     /* Non-blocking: drop if queue is full to avoid stalling the caller */
+    if (canTxQueue != NULL) {
+        xQueueSend(canTxQueue, &frame, 0);
+    }
+}
+
+/* ── CAN_SendMcuFault ─────────────────────────────────────────────── */
+void CAN_SendMcuFault(uint8_t motor_id, uint8_t fault_code, uint16_t fault_value)
+{
+    struct omni_robot_mcu_fault_t fault_msg = {
+        .motor_id    = motor_id,
+        .fault_code  = fault_code,
+        .fault_value = fault_value,
+    };
+
+    can_raw_frame_t frame;
+    frame.id  = MOTOR_FAULT_CAN_ID;
+    frame.dlc = OMNI_ROBOT_MCU_FAULT_LENGTH;
+
+    if (omni_robot_mcu_fault_pack(frame.data, &fault_msg, sizeof(frame.data)) < 0) {
+        LOG_ERROR("CAN_SendMcuFault: pack failed\r\n");
+        return;
+    }
+
     if (canTxQueue != NULL) {
         xQueueSend(canTxQueue, &frame, 0);
     }

@@ -16,7 +16,8 @@
   *
   *  With the daisy-chain architecture, one STM32 controls all MOTOR_MAX
   *  servo slots.  One can_rx_state_t entry exists per slot (0..MOTOR_MAX-1).
-  *  The CAN hardware filter passes 0x200-0x3FF (RPi_Command_1..6 + RPi_Reconfig).
+  *  The CAN hardware filter passes 0x200-0x3FF
+  *  (RPi_Command_1..6, RPi_Reconfig, RPi_FaultClear).
   *****************************************************************************
   */
 
@@ -59,10 +60,23 @@ typedef struct {
     bool    pending;               /**< true = rescan requested, not yet handled */
 } can_reconfig_state_t;
 
-extern can_rx_state_t      g_can_rx[MOTOR_MAX];
+extern can_rx_state_t       g_can_rx[MOTOR_MAX];
 extern can_reconfig_state_t g_can_reconfig;
-extern SemaphoreHandle_t   can_rx_mutex;
-extern QueueHandle_t       canTxQueue;
+extern SemaphoreHandle_t    can_rx_mutex;
+extern QueueHandle_t        canTxQueue;
+
+/* ── Shared fault-clear state ──────────────────────────────────────── */
+/**
+ * Populated by canRxTask when an RPi_FaultClear (0x301) frame arrives.
+ * servoMotorTask polls .pending and clears the indicated motor(s).
+ * Always access under can_rx_mutex.
+ */
+typedef struct {
+    uint8_t motor_id;  /**< 1-6 = specific motor, 0 = clear all */
+    bool    pending;
+} can_fault_clear_state_t;
+
+extern can_fault_clear_state_t g_can_fault_clear;
 
 /* ── Helper: enqueue a packed MCU_Status frame for TX ───────────── */
 /**
@@ -74,6 +88,17 @@ extern QueueHandle_t       canTxQueue;
  * Non-blocking: drops the message silently if the TX queue is full.
  */
 void CAN_SendMcuStatus(uint8_t motor_idx, const motor_status_t *status);
+
+/**
+ * Enqueue an MCU_Fault frame (0x10F) on the TX queue.
+ *
+ * @param motor_id    Servo bus ID of the faulting motor (1..MOTOR_MAX).
+ * @param fault_code  FAULT_CODE_* constant from motorSelection.h.
+ * @param fault_value Measured value that triggered the fault (mV or degC).
+ *
+ * Non-blocking: drops the message silently if the TX queue is full.
+ */
+void CAN_SendMcuFault(uint8_t motor_id, uint8_t fault_code, uint16_t fault_value);
 
 #ifdef __cplusplus
 }
