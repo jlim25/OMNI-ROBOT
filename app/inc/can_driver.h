@@ -8,11 +8,15 @@
   *  Architecture
   *  ------------
   *  canRxTask  – woken by ISR via direct task notification; unpacks frames
-  *               and updates g_can_rx under a mutex.
+  *               and updates g_can_rx[i] under a mutex for the matching motor.
   *  canTxTask  – blocks on canTxQueue; packs and sends frames via HAL.
   *
   *  The ISR callback (HAL_CAN_RxFifo0MsgPendingCallback) is implemented
   *  in can_driver.c and notifies canRxTask directly.
+  *
+  *  With the daisy-chain architecture, one STM32 controls all MOTOR_MAX
+  *  servo slots.  One can_rx_state_t entry exists per slot (0..MOTOR_MAX-1).
+  *  The CAN hardware filter passes 0x200-0x3FF (RPi_Command_1..6 + RPi_Reconfig).
   *****************************************************************************
   */
 
@@ -33,26 +37,43 @@ typedef struct {
     uint8_t  data[8];
 } can_raw_frame_t;
 
-/* ── Shared RX state ────────────────────────────────────────────── */
+/* ── Shared RX state (motor commands) ──────────────────────────── */
 /**
- * Written by canRxTask, read by any task (e.g. servoMotorTask).
+ * One entry per motor slot (indexed 0..MOTOR_MAX-1).
+ * Written by canRxTask, read by servoMotorTask.
  * Always access under can_rx_mutex.
  */
 typedef struct {
-    struct MOTOR_CAN_CMD_T cmd;  // latest decoded RPi_Command
-    bool                   fresh; // true until consumed by reader
+    motor_cmd_t cmd;    // latest decoded RPi_Command for this slot
+    bool        fresh;  // true until consumed by servoMotorTask
 } can_rx_state_t;
 
-extern can_rx_state_t  g_can_rx;
-extern SemaphoreHandle_t can_rx_mutex;
-extern QueueHandle_t     canTxQueue;
-
-/* ── Helper: enqueue a pre-packed MCU_Status frame for TX ───────── */
+/* ── Shared reconfig state ──────────────────────────────────────── */
 /**
- * Call from any task to publish a status update to the RPi.
- * Non-blocking: drops the message silently if the queue is full.
+ * Populated by canRxTask when an RPi_Reconfig (0x300) frame arrives.
+ * servoMotorTask polls .pending and triggers a full rescan when set.
+ * Always access under can_rx_mutex.
  */
-void CAN_SendMcuStatus(const struct MOTOR_CAN_STATUS_T *status);
+typedef struct {
+    uint8_t servo_ids[MOTOR_MAX];  /**< Servo bus IDs to activate (0 = empty) */
+    bool    pending;               /**< true = rescan requested, not yet handled */
+} can_reconfig_state_t;
+
+extern can_rx_state_t      g_can_rx[MOTOR_MAX];
+extern can_reconfig_state_t g_can_reconfig;
+extern SemaphoreHandle_t   can_rx_mutex;
+extern QueueHandle_t       canTxQueue;
+
+/* ── Helper: enqueue a packed MCU_Status frame for TX ───────────── */
+/**
+ * Call from any task to publish a status update for a single motor.
+ *
+ * @param motor_idx  Index into g_motor_configs[] (0..MOTOR_MAX-1).
+ * @param status     Pointer to the packed status struct.
+ *
+ * Non-blocking: drops the message silently if the TX queue is full.
+ */
+void CAN_SendMcuStatus(uint8_t motor_idx, const motor_status_t *status);
 
 #ifdef __cplusplus
 }

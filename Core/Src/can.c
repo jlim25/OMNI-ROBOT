@@ -21,7 +21,7 @@
 #include "can.h"
 
 /* USER CODE BEGIN 0 */
-#include "motorSelection.h" // MOTOR_CAN_CMD_ID
+#include "motorSelection.h"  /* MOTOR_MAX, MOTOR_RECONFIG_CAN_ID */
 /* USER CODE END 0 */
 
 CAN_HandleTypeDef hcan;
@@ -55,22 +55,26 @@ void MX_CAN_Init(void)
   }
   /* USER CODE BEGIN CAN_Init 2 */
 
-  /* ── RX filter: pass only MOTOR_CAN_CMD_ID standard ID ───────────
+  /* ── RX filter: accept 0x200-0x3FF (RPi_Command_1..6 + RPi_Reconfig) ──────
    * 32-bit mask-mode filter on FIFO0.
    * Layout of 32-bit filter register for standard frames:
    *   [31:21] STID[10:0]  [20:3] unused  [2] IDE  [1] RTR  [0] 0
-   *
-   * FilterId  = id << 21   (id = MOTOR_CAN_CMD_ID from motorSelection.h)
-   * FilterMask = 0x7FF << 21  (match all 11 ID bits)
-   *            | (1 << 2)     (require IDE=0 i.e. standard frame)
-   * ─────────────────────────────────────────────────────────────── */
+   * ──────────────────────────────────────────────────────── */
   CAN_FilterTypeDef sFilterConfig;
   sFilterConfig.FilterBank           = 0;
   sFilterConfig.FilterMode           = CAN_FILTERMODE_IDMASK;
   sFilterConfig.FilterScale          = CAN_FILTERSCALE_32BIT;
-  sFilterConfig.FilterIdHigh         = (MOTOR_CAN_CMD_ID << 5) & 0xFFFFu;
+  /* Accept any standard data frame whose 11-bit ID falls in 0x200-0x3FF.
+   * This covers RPi_Command_1..6 (0x201-0x206) and RPi_Reconfig (0x300).
+   *
+   * Mask strategy: only check ID bits 10:9 = 0b01 (upper two bits = 0x200 range).
+   *   FilterIdHigh   = (0x200 << 5) & 0xFFFF = 0x4000  ← reference bits
+   *   FilterMaskIdHigh = (0x600 << 5) & 0xFFFF = 0xC000  ← check bits 10:9
+   *   FilterMaskIdLow  = 0x0006  ← require IDE=0, RTR=0
+   */
+  sFilterConfig.FilterIdHigh         = (0x200u << 5u) & 0xFFFFu;
   sFilterConfig.FilterIdLow          = 0x0000u;
-  sFilterConfig.FilterMaskIdHigh     = (0x7FFu << 5) & 0xFFFFu;  // match all 11 ID bits
+  sFilterConfig.FilterMaskIdHigh     = (0x600u << 5u) & 0xFFFFu;
   sFilterConfig.FilterMaskIdLow      = 0x0006u;                    // require IDE=0 (bit2) and RTR=0 (bit1)
   sFilterConfig.FilterFIFOAssignment = CAN_RX_FIFO0;
   sFilterConfig.FilterActivation     = CAN_FILTER_ENABLE;

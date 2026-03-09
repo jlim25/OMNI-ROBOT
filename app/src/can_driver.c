@@ -7,10 +7,10 @@
   *  ----
   *  RX:  CAN frame arrives → HAL_CAN_RxFifo0MsgPendingCallback() (ISR)
   *         → vTaskNotifyGiveFromISR() → canRxTask() wakes
-  *         → HAL_CAN_GetRxMessage() → omni_robot_r_pi_command_unpack()
-  *         → update g_can_rx under can_rx_mutex
+  *         → HAL_CAN_GetRxMessage() → match CAN ID against g_motor_configs
+  *         → motor_cmd_unpack_fn() → update g_can_rx[i] under can_rx_mutex
   *
-  *  TX:  Any task calls CAN_SendMcuStatus() → xQueueSend(canTxQueue)
+  *  TX:  Any task calls CAN_SendMcuStatus(i, &status) → xQueueSend(canTxQueue)
   *         → canTxTask() wakes → HAL_CAN_AddTxMessage()
   *****************************************************************************
   */
@@ -18,11 +18,12 @@
 #include "can_driver.h"
 #include "can.h"
 #include "logger.h"
-#include "motorSelection.h"  // MOTOR_CAN_CMD_ID, MOTOR_CAN_STATUS_ID
+#include "omni_robot.h"
 
-/* ── Shared RX state ────────────────────────────────────────────── */
-can_rx_state_t   g_can_rx     = { 0 };
-SemaphoreHandle_t can_rx_mutex = NULL;
+/* ── Shared RX state (one entry per motor slot) ─────────────────── */
+can_rx_state_t      g_can_rx[MOTOR_MAX]  = { 0 };
+can_reconfig_state_t g_can_reconfig      = { 0 };
+SemaphoreHandle_t    can_rx_mutex        = NULL;
 
 /* ── TX queue ───────────────────────────────────────────────────── */
 QueueHandle_t canTxQueue = NULL;
@@ -62,7 +63,7 @@ void canRxTask(void const *argument)
     /* Store our own handle so the ISR can notify us */
     s_canRxTaskHandle = xTaskGetCurrentTaskHandle();
 
-    /* Create the mutex that guards g_can_rx */
+    /* Create the mutex that guards g_can_rx[] */
     can_rx_mutex = xSemaphoreCreateMutex();
     configASSERT(can_rx_mutex != NULL);
 
@@ -83,26 +84,67 @@ void canRxTask(void const *argument)
                 break;
             }
 
-            /* Route by CAN ID */
-            if (rxHeader.StdId == MOTOR_CAN_CMD_ID)
+            /* Route by CAN ID – search all motor configs */
+            bool matched = false;
+            for (uint8_t i = 0; i < MOTOR_MAX; i++)
             {
-                struct MOTOR_CAN_CMD_T decoded;
+                if (rxHeader.StdId != g_motor_configs[i].can_cmd_id) {
+                    continue;
+                }
 
-                if (MOTOR_CAN_CMD_UNPACK(&decoded, rxData,
-                                         rxHeader.DLC) >= 0)
+                motor_cmd_t decoded;
+                if (g_motor_configs[i].cmd_unpack(&decoded, rxData,
+                                                   rxHeader.DLC) >= 0)
                 {
                     if (xSemaphoreTake(can_rx_mutex, pdMS_TO_TICKS(5))
                         == pdTRUE)
                     {
-                        g_can_rx.cmd   = decoded;
-                        g_can_rx.fresh = true;
+                        g_can_rx[i].cmd   = decoded;
+                        g_can_rx[i].fresh = true;
                         xSemaphoreGive(can_rx_mutex);
                     }
                 } else {
-                    LOG_WARNING("CAN RX unpack failed for RPi_Command\r\n");
+                    LOG_WARNING("CAN RX unpack failed for %s\r\n",
+                                g_motor_configs[i].name);
+                }
+
+                matched = true;
+                break;
+            }
+
+            if (!matched)
+            {
+                /* RPi_Reconfig (0x300): explicit servo-ID list for rescan */
+                if (rxHeader.StdId == MOTOR_RECONFIG_CAN_ID &&
+                    rxHeader.DLC   == OMNI_ROBOT_R_PI_RECONFIG_LENGTH)
+                {
+                    struct omni_robot_r_pi_reconfig_t rec;
+                    if (omni_robot_r_pi_reconfig_unpack(&rec, rxData,
+                                                        rxHeader.DLC) >= 0)
+                    {
+                        if (xSemaphoreTake(can_rx_mutex, pdMS_TO_TICKS(5))
+                            == pdTRUE)
+                        {
+                            g_can_reconfig.servo_ids[0] = rec.servo_id_1;
+                            g_can_reconfig.servo_ids[1] = rec.servo_id_2;
+                            g_can_reconfig.servo_ids[2] = rec.servo_id_3;
+                            g_can_reconfig.servo_ids[3] = rec.servo_id_4;
+                            g_can_reconfig.servo_ids[4] = rec.servo_id_5;
+                            g_can_reconfig.servo_ids[5] = rec.servo_id_6;
+                            g_can_reconfig.pending      = true;
+                            xSemaphoreGive(can_rx_mutex);
+                        }
+                        matched = true;
+                    } else {
+                        LOG_WARNING("CAN RX RPi_Reconfig unpack failed\r\n");
+                    }
+                }
+
+                if (!matched) {
+                    LOG_WARNING("CAN RX unknown ID 0x%03lX\r\n",
+                                (unsigned long)rxHeader.StdId);
                 }
             }
-            /* Add more else-if blocks here for other message IDs */
         }
 
         /* FIFO is now empty – re-enable the interrupt so the next arriving
@@ -160,15 +202,21 @@ void canTxTask(void const *argument)
 }
 
 /* ── CAN_SendMcuStatus ──────────────────────────────────────────── */
-void CAN_SendMcuStatus(const struct MOTOR_CAN_STATUS_T *status)
+void CAN_SendMcuStatus(uint8_t motor_idx, const motor_status_t *status)
 {
-    can_raw_frame_t frame;
-    frame.id  = MOTOR_CAN_STATUS_ID;
-    frame.dlc = MOTOR_CAN_STATUS_LENGTH;
+    if (motor_idx >= MOTOR_MAX) {
+        LOG_ERROR("CAN_SendMcuStatus: invalid motor_idx %u\r\n", motor_idx);
+        return;
+    }
 
-    if (MOTOR_CAN_STATUS_PACK(frame.data, status,
-                                   sizeof(frame.data)) < 0) {
-        LOG_ERROR("CAN_SendMcuStatus: pack failed\r\n");
+    const motor_config_t *cfg = &g_motor_configs[motor_idx];
+
+    can_raw_frame_t frame;
+    frame.id  = cfg->can_status_id;
+    frame.dlc = cfg->can_status_len;
+
+    if (cfg->status_pack(frame.data, status, sizeof(frame.data)) < 0) {
+        LOG_ERROR("CAN_SendMcuStatus: pack failed for %s\r\n", cfg->name);
         return;
     }
 
