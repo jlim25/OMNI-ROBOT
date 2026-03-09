@@ -3,90 +3,78 @@
 /**
   *****************************************************************************
   * @file    motorSelection.h
-  * @brief   Compile-time motor selection for a single-motor MCU node.
+  * @brief   Motor configuration table for the single-MCU daisy-chain node.
   *
-  *          Each MCU in the system drives exactly one servo.  Set
-  *          MOTOR_SELECTION to the joint this MCU is responsible for.
-  *          Everything else (hardware ID, angular spec) is derived here.
+  *          MOTOR_MAX is the compile-time ceiling (max possible motors = 6).
+  *          The actual number of motors present is discovered at runtime via
+  *          a servo-bus ping scan and stored in g_active_motor_count.
   *
-  *  Usage
-  *  -----
-  *  Uncomment exactly ONE of the MOTOR_SELECTION lines below, or supply
-  *  the definition as a compiler flag: -DMOTOR_SELECTION=MOTOR_JOINT_1
+  *  To add or reconfigure motors:
+  *    • Edit g_motor_configs[] in motor_config.c for permanent changes.
+  *    • Send an RPi_Reconfig CAN frame (0x300) for live reconfiguration.
+  *
+  *  Servo ID → Joint mapping
+  *  ------------------------
+  *  Servo bus ID 1 ↔ Joint 1 ↔ RPi_Command_1 / MCU_Status_1
+  *  Servo bus ID 2 ↔ Joint 2 ↔ RPi_Command_2 / MCU_Status_2   ... etc.
+  *  (IDs must be pre-programmed into the physical servos.)
   *****************************************************************************
   */
 
+#include <stdbool.h>
 #include "hiwonder_bus_servo.h"
-#include "omni_robot.h"  // per-motor CAN frame ID constants
+#include "omni_robot.h"  // CAN frame ID / length constants
 
-/* ── Available motor identifiers ────────────────────────────────── */
-#define MOTOR_JOINT_1   1
-#define MOTOR_JOINT_2   2
-#define MOTOR_JOINT_3   3
-#define MOTOR_JOINT_4   4
+/* ── Compile-time motor ceiling ──────────────────────────────────── */
+#define MOTOR_MAX   6   /**< Maximum number of servos on the bus */
 
-/* ── Select the motor for this MCU (uncomment exactly one) ───────── */
-#define MOTOR_SELECTION   MOTOR_JOINT_1
-// #define MOTOR_SELECTION   MOTOR_JOINT_2
-// #define MOTOR_SELECTION   MOTOR_JOINT_3
-// #define MOTOR_SELECTION   MOTOR_JOINT_4
+/* ── CAN message for live reconfiguration ────────────────────────── */
+#define MOTOR_RECONFIG_CAN_ID   OMNI_ROBOT_R_PI_RECONFIG_FRAME_ID  /* 0x300 */
 
-/* ── Per-motor configuration ─────────────────────────────────────
+/* ── Canonical CAN payload types ──────────────────────────────────
  *
- *  MOTOR_ID   – servo hardware ID on the half-duplex bus (1–253)
- *  MOTOR_SPEC – hiwonder_servo_spec_t initializer for angular range
- *  MOTOR_NAME – human-readable label used in log messages
+ *  All six RPi_Command structs are layout-identical (same fields, same
+ *  sizes).  Likewise for the six MCU_Status structs.  We use the _1
+ *  variants as the canonical C type and cast where necessary.
+ * ─────────────────────────────────────────────────────────────────── */
+typedef struct omni_robot_r_pi_command_1_t  motor_cmd_t;
+typedef struct omni_robot_mcu_status_1_t    motor_status_t;
+
+/* ── Function-pointer types for CAN pack / unpack ─────────────────── */
+typedef int (*motor_cmd_unpack_fn)(motor_cmd_t       *dst,
+                                   const uint8_t     *data,
+                                   size_t             size);
+
+typedef int (*motor_status_pack_fn)(uint8_t              *dst,
+                                    const motor_status_t *src,
+                                    size_t                size);
+
+/* ── Per-motor compile-time descriptor ────────────────────────────── */
+typedef struct {
+    uint8_t                servo_id;        // unique servo bus ID (1–6)
+    hiwonder_servo_spec_t  spec;            // physical angular range
+    const char            *name;            // human-readable label for logs
+
+    uint32_t               can_cmd_id;      // CAN std-ID for incoming RPi_Command
+    uint32_t               can_status_id;   // CAN std-ID for outgoing MCU_Status
+    uint8_t                can_status_len;  // DLC of MCU_Status frame (bytes)
+
+    motor_cmd_unpack_fn    cmd_unpack;      // cantools-generated unpack fn
+    motor_status_pack_fn   status_pack;     // cantools-generated pack fn
+} motor_config_t;
+
+/* ── Global config table (defined in motor_config.c) ─────────────── */
+extern const motor_config_t g_motor_configs[MOTOR_MAX];
+
+/* ── Runtime motor presence state (defined in servoMotor.c) ──────── */
+/**
+ * g_servo_present[i] is true iff the servo at g_motor_configs[i].servo_id
+ * responded during the last scan.  Index i is 0-based (servo ID − 1).
  *
- * ──────────────────────────────────────────────────────────────── */
-#if   MOTOR_SELECTION == MOTOR_JOINT_1
-    #define MOTOR_ID              1
-    #define MOTOR_SPEC            ((hiwonder_servo_spec_t)HTD_85H_SPEC)
-    #define MOTOR_NAME            "Base-1 (240 deg)"
-    #define MOTOR_CAN_CMD_ID      OMNI_ROBOT_R_PI_COMMAND_1_FRAME_ID
-    #define MOTOR_CAN_STATUS_ID   OMNI_ROBOT_MCU_STATUS_1_FRAME_ID
-    #define MOTOR_CAN_CMD_T       omni_robot_r_pi_command_1_t
-    #define MOTOR_CAN_STATUS_T    omni_robot_mcu_status_1_t
-    #define MOTOR_CAN_CMD_UNPACK  omni_robot_r_pi_command_1_unpack
-    #define MOTOR_CAN_STATUS_PACK omni_robot_mcu_status_1_pack
-    #define MOTOR_CAN_STATUS_LENGTH OMNI_ROBOT_MCU_STATUS_1_LENGTH
-
-#elif MOTOR_SELECTION == MOTOR_JOINT_2
-    #define MOTOR_ID              2
-    #define MOTOR_SPEC            ((hiwonder_servo_spec_t)HTD_85H_SPEC)
-    #define MOTOR_NAME            "Base-2 (240 deg)"
-    #define MOTOR_CAN_CMD_ID      OMNI_ROBOT_R_PI_COMMAND_2_FRAME_ID
-    #define MOTOR_CAN_STATUS_ID   OMNI_ROBOT_MCU_STATUS_2_FRAME_ID
-    #define MOTOR_CAN_CMD_T       omni_robot_r_pi_command_2_t
-    #define MOTOR_CAN_STATUS_T    omni_robot_mcu_status_2_t
-    #define MOTOR_CAN_CMD_UNPACK  omni_robot_r_pi_command_2_unpack
-    #define MOTOR_CAN_STATUS_PACK omni_robot_mcu_status_2_pack
-    #define MOTOR_CAN_STATUS_LENGTH OMNI_ROBOT_MCU_STATUS_2_LENGTH
-
-#elif MOTOR_SELECTION == MOTOR_JOINT_3
-    #define MOTOR_ID              3
-    #define MOTOR_SPEC            ((hiwonder_servo_spec_t)HTD_45H_SPEC)
-    #define MOTOR_NAME            "Joint-3 (240 deg)"
-    #define MOTOR_CAN_CMD_ID      OMNI_ROBOT_R_PI_COMMAND_3_FRAME_ID
-    #define MOTOR_CAN_STATUS_ID   OMNI_ROBOT_MCU_STATUS_3_FRAME_ID
-    #define MOTOR_CAN_CMD_T       omni_robot_r_pi_command_3_t
-    #define MOTOR_CAN_STATUS_T    omni_robot_mcu_status_3_t
-    #define MOTOR_CAN_CMD_UNPACK  omni_robot_r_pi_command_3_unpack
-    #define MOTOR_CAN_STATUS_PACK omni_robot_mcu_status_3_pack
-    #define MOTOR_CAN_STATUS_LENGTH OMNI_ROBOT_MCU_STATUS_3_LENGTH
-
-#elif MOTOR_SELECTION == MOTOR_JOINT_4
-    #define MOTOR_ID              4
-    #define MOTOR_SPEC            ((hiwonder_servo_spec_t)HTD_35H_SPEC)
-    #define MOTOR_NAME            "Joint-4 (240 deg)"
-    #define MOTOR_CAN_CMD_ID      OMNI_ROBOT_R_PI_COMMAND_4_FRAME_ID
-    #define MOTOR_CAN_STATUS_ID   OMNI_ROBOT_MCU_STATUS_4_FRAME_ID
-    #define MOTOR_CAN_CMD_T       omni_robot_r_pi_command_4_t
-    #define MOTOR_CAN_STATUS_T    omni_robot_mcu_status_4_t
-    #define MOTOR_CAN_CMD_UNPACK  omni_robot_r_pi_command_4_unpack
-    #define MOTOR_CAN_STATUS_PACK omni_robot_mcu_status_4_pack
-    #define MOTOR_CAN_STATUS_LENGTH OMNI_ROBOT_MCU_STATUS_4_LENGTH
-
-#else
-    #error "motorSelection.h: MOTOR_SELECTION is not set to a known motor. \
-Uncomment one of the MOTOR_JOINT_x defines."
-#endif
+ * g_active_motor_count is the total number of responding servos.
+ *
+ * Both are written exclusively by the servoMotorTask and may be read
+ * by other tasks for status purposes (no mutex needed for single-byte reads).
+ */
+extern volatile uint8_t g_active_motor_count;
+extern volatile bool    g_servo_present[MOTOR_MAX];

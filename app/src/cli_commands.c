@@ -6,8 +6,8 @@
   * @file    cli_commands.c
   * @brief   Application CLI command definitions for FreeRTOS-Plus-CLI.
   *
-  *          Each command is a static CLI_Command_Definition_t paired with a
-  *          callback.  All commands are registered via CLI_RegisterAllCommands().
+  *          All commands take a motor ID (1..MOTOR_MAX) as their first
+  *          argument, since one MCU now controls all daisy-chained servos.
   *
   *  Adding a new command
   *  --------------------
@@ -19,10 +19,10 @@
   *  2. Declare a static CLI_Command_Definition_t:
   *       static const CLI_Command_Definition_t xMyCmd = {
   *           "mycommand",            // what the user types
-  *           "\r\nmycommand <a>:\r\n"
-  *           "  Does something with <a>.\r\n\r\n",
+  *           "\r\nmycommand <id> <a>:\r\n"
+  *           "  Does something on motor <id> with <a>.\r\n\r\n",
   *           prvMyCmd,
-  *           1                       // number of parameters (-1 = variable)
+  *           2                       // number of parameters
   *       };
   *
   *  3. Call FreeRTOS_CLIRegisterCommand(&xMyCmd) inside
@@ -36,6 +36,10 @@
 #include "debug.h"
 #include "string.h"
 #include "stdlib.h"
+
+/* Stringify helper for MOTOR_MAX in command help strings */
+#define STRINGIFY_IMPL(x)  #x
+#define STRINGIFY(x)       STRINGIFY_IMPL(x)
 
 /* Forward-declare callbacks */
 static BaseType_t prvMoveAngleCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
@@ -51,36 +55,38 @@ static BaseType_t prvStopCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
 
 static const CLI_Command_Definition_t xMoveAngleCommand = {
     "move",
-    "\r\nmove <degrees> <time_ms>:\r\n"
-    "  Move the servo to <degrees> over <time_ms> milliseconds.\r\n"
-    "  Example: move 120.0 1000\r\n\r\n",
+    "\r\nmove <id> <degrees> <time_ms>:\r\n"
+    "  Move servo <id> (1.." STRINGIFY(MOTOR_MAX) ") to <degrees> over\r\n"
+    "  <time_ms> milliseconds.\r\n"
+    "  Example: move 1 120.0 1000\r\n\r\n",
     prvMoveAngleCommand,
-    2   /* degrees, time_ms */
+    3   /* id, degrees, time_ms */
 };
 
 static const CLI_Command_Definition_t xReadPosCommand = {
     "readpos",
-    "\r\nreadpos:\r\n"
-    "  Read the current servo position (degrees and raw value).\r\n\r\n",
+    "\r\nreadpos <id>:\r\n"
+    "  Read the current position of servo <id> (1.." STRINGIFY(MOTOR_MAX) ").\r\n\r\n",
     prvReadPosCommand,
-    0
+    1   /* id */
 };
 
 static const CLI_Command_Definition_t xTorqueCommand = {
     "torque",
-    "\r\ntorque <on|off>:\r\n"
-    "  Enable or disable servo torque.\r\n"
-    "  Example: torque on\r\n\r\n",
+    "\r\ntorque <id> <on|off>:\r\n"
+    "  Enable or disable torque on servo <id> (1.." STRINGIFY(MOTOR_MAX) ").\r\n"
+    "  Example: torque 2 on\r\n\r\n",
     prvTorqueCommand,
-    1   /* on / off */
+    2   /* id, on/off */
 };
 
 static const CLI_Command_Definition_t xStopCommand = {
     "stop",
-    "\r\nstop:\r\n"
-    "  Immediately halt the servo at its current position.\r\n\r\n",
+    "\r\nstop <id>:\r\n"
+    "  Immediately halt servo <id> (1.." STRINGIFY(MOTOR_MAX) ") at its\r\n"
+    "  current position.\r\n\r\n",
     prvStopCommand,
-    0   /* no parameters */
+    1   /* id */
 };
 
 /* ── Registration ───────────────────────────────────────────────── */
@@ -93,37 +99,64 @@ void CLI_RegisterAllCommands(void)
     FreeRTOS_CLIRegisterCommand(&xStopCommand);
 }
 
-/* ── Servo handle (shared with servoMotor.c via extern) ─────────── */
-/* Declare this extern so CLI commands can reach the same handle that
- * servoMotorTask() initialised.  The definition lives in servoMotor.c. */
-extern hiwonder_servo_t servo;
+/* ── Servo handle array (defined in servoMotor.c) ───────────────── */
+extern hiwonder_servo_t servo[MOTOR_MAX];
+
+/* ── Helper: parse motor ID argument (1-based) → 0-based index ──── */
+/**
+ * Parses pcArg as a motor ID (1..MOTOR_MAX) and writes the 0-based
+ * array index to *idx_out.
+ *
+ * @return true on success, false if out of range.
+ */
+static bool prv_parse_motor_id(const char *pcArg, BaseType_t len,
+                                uint8_t *idx_out)
+{
+    (void)len;
+    long id = strtol(pcArg, NULL, 10);
+    if (id < 1 || id > (long)MOTOR_MAX) {
+        return false;
+    }
+    *idx_out = (uint8_t)(id - 1u);
+    return true;
+}
 
 /* ── Callbacks ──────────────────────────────────────────────────── */
 static BaseType_t prvMoveAngleCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                       const char *pcCommandString)
 {
-    BaseType_t xLen1 = 0, xLen2 = 0;
+    BaseType_t xLen1 = 0, xLen2 = 0, xLen3 = 0;
 
-    const char *pcDeg  = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen1);
-    const char *pcTime = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xLen2);
+    const char *pcId   = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen1);
+    const char *pcDeg  = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xLen2);
+    const char *pcTime = FreeRTOS_CLIGetParameter(pcCommandString, 3, &xLen3);
 
-    if (pcDeg == NULL || pcTime == NULL) {
+    if (pcId == NULL || pcDeg == NULL || pcTime == NULL) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 "Usage: move <degrees> <time_ms>\r\n");
+                 "Usage: move <id> <degrees> <time_ms>\r\n");
         return pdFALSE;
     }
 
-    float deg     = strtof(pcDeg,  NULL);
+    uint8_t idx;
+    if (!prv_parse_motor_id(pcId, xLen1, &idx)) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "Invalid motor ID. Use 1..%u\r\n", (unsigned)MOTOR_MAX);
+        return pdFALSE;
+    }
+
+    float    deg  = strtof(pcDeg,  NULL);
     uint16_t t_ms = (uint16_t)strtoul(pcTime, NULL, 10);
 
-    hwservo_status_t st = HWSERVO_MoveToAngle(&servo, deg, t_ms);
+    hwservo_status_t st = HWSERVO_MoveToAngle(&servo[idx], deg, t_ms);
 
     if (st == HWSERVO_OK) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": moving to %.1f deg over %u ms\r\n", deg, t_ms);
+                 "%s: moving to %.1f deg over %u ms\r\n",
+                 g_motor_configs[idx].name, deg, t_ms);
     } else {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": move failed (err %d)\r\n", (int)st);
+                 "%s: move failed (err %d)\r\n",
+                 g_motor_configs[idx].name, (int)st);
     }
     return pdFALSE;
 }
@@ -131,19 +164,34 @@ static BaseType_t prvMoveAngleCommand(char *pcWriteBuffer, size_t xWriteBufferLe
 static BaseType_t prvReadPosCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                     const char *pcCommandString)
 {
-    (void)pcCommandString;
+    BaseType_t xLen1 = 0;
+    const char *pcId = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen1);
 
-    float deg    = 0.0f;
-    int16_t raw  = 0;
+    if (pcId == NULL) {
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Usage: readpos <id>\r\n");
+        return pdFALSE;
+    }
 
-    hwservo_status_t st = HWSERVO_ReadAngle_deg(&servo, &deg);
-    if (st == HWSERVO_OK) {
-        HWSERVO_ReadPos_Raw(&servo, &raw);
+    uint8_t idx;
+    if (!prv_parse_motor_id(pcId, xLen1, &idx)) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": %.1f deg (raw=%d)\r\n", deg, raw);
+                 "Invalid motor ID. Use 1..%u\r\n", (unsigned)MOTOR_MAX);
+        return pdFALSE;
+    }
+
+    float   deg = 0.0f;
+    int16_t raw = 0;
+
+    hwservo_status_t st = HWSERVO_ReadAngle_deg(&servo[idx], &deg);
+    if (st == HWSERVO_OK) {
+        HWSERVO_ReadPos_Raw(&servo[idx], &raw);
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "%s: %.1f deg (raw=%d)\r\n",
+                 g_motor_configs[idx].name, deg, raw);
     } else {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": read failed (err %d)\r\n", (int)st);
+                 "%s: read failed (err %d)\r\n",
+                 g_motor_configs[idx].name, (int)st);
     }
     return pdFALSE;
 }
@@ -151,28 +199,39 @@ static BaseType_t prvReadPosCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
 static BaseType_t prvTorqueCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                    const char *pcCommandString)
 {
-    BaseType_t xLen = 0;
-    const char *pcArg = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen);
+    BaseType_t xLen1 = 0, xLen2 = 0;
+    const char *pcId  = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen1);
+    const char *pcArg = FreeRTOS_CLIGetParameter(pcCommandString, 2, &xLen2);
 
-    if (pcArg == NULL) {
-        snprintf(pcWriteBuffer, xWriteBufferLen, "Usage: torque <on|off>\r\n");
+    if (pcId == NULL || pcArg == NULL) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "Usage: torque <id> <on|off>\r\n");
+        return pdFALSE;
+    }
+
+    uint8_t idx;
+    if (!prv_parse_motor_id(pcId, xLen1, &idx)) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "Invalid motor ID. Use 1..%u\r\n", (unsigned)MOTOR_MAX);
         return pdFALSE;
     }
 
     bool enable;
-    if (strncmp(pcArg, "on", xLen) == 0) {
+    if (strncmp(pcArg, "on", (size_t)xLen2) == 0) {
         enable = true;
-    } else if (strncmp(pcArg, "off", xLen) == 0) {
+    } else if (strncmp(pcArg, "off", (size_t)xLen2) == 0) {
         enable = false;
     } else {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 "Invalid argument '%.*s'. Use 'on' or 'off'.\r\n", (int)xLen, pcArg);
+                 "Invalid argument '%.*s'. Use 'on' or 'off'.\r\n",
+                 (int)xLen2, pcArg);
         return pdFALSE;
     }
 
-    hwservo_status_t st = HWSERVO_EnableTorque(&servo, enable);
+    hwservo_status_t st = HWSERVO_EnableTorque(&servo[idx], enable);
     snprintf(pcWriteBuffer, xWriteBufferLen,
-             MOTOR_NAME ": torque %s%s\r\n",
+             "%s: torque %s%s\r\n",
+             g_motor_configs[idx].name,
              enable ? "enabled" : "disabled",
              st == HWSERVO_OK ? "" : " (FAILED)");
     return pdFALSE;
@@ -181,29 +240,43 @@ static BaseType_t prvTorqueCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
 static BaseType_t prvStopCommand(char *pcWriteBuffer, size_t xWriteBufferLen,
                                  const char *pcCommandString)
 {
-    (void)pcCommandString;
+    BaseType_t xLen1 = 0;
+    const char *pcId = FreeRTOS_CLIGetParameter(pcCommandString, 1, &xLen1);
 
-    /* Read the current raw position, then immediately command the servo to
-     * hold that position with time_ms=0 (instantaneous).  This cancels any
-     * in-progress move without disabling torque, so the joint stays rigid. */
-    int16_t raw = 0;
-    hwservo_status_t st = HWSERVO_ReadPos_Raw(&servo, &raw);
-
-    if (st != HWSERVO_OK) {
-        snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": stop failed – could not read position (err %d)\r\n",
-                 (int)st);
+    if (pcId == NULL) {
+        snprintf(pcWriteBuffer, xWriteBufferLen, "Usage: stop <id>\r\n");
         return pdFALSE;
     }
 
-    st = HWSERVO_MoveTimeWrite_Raw(&servo, (uint16_t)raw, 0);
+    uint8_t idx;
+    if (!prv_parse_motor_id(pcId, xLen1, &idx)) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "Invalid motor ID. Use 1..%u\r\n", (unsigned)MOTOR_MAX);
+        return pdFALSE;
+    }
+
+    /* Read the current raw position, then immediately command the servo to
+     * hold that position with time_ms=0 (instantaneous). */
+    int16_t raw = 0;
+    hwservo_status_t st = HWSERVO_ReadPos_Raw(&servo[idx], &raw);
+
+    if (st != HWSERVO_OK) {
+        snprintf(pcWriteBuffer, xWriteBufferLen,
+                 "%s: stop failed – could not read position (err %d)\r\n",
+                 g_motor_configs[idx].name, (int)st);
+        return pdFALSE;
+    }
+
+    st = HWSERVO_MoveTimeWrite_Raw(&servo[idx], (uint16_t)raw, 0);
 
     if (st == HWSERVO_OK) {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": stopped at raw=%d\r\n", raw);
+                 "%s: stopped at raw=%d\r\n",
+                 g_motor_configs[idx].name, raw);
     } else {
         snprintf(pcWriteBuffer, xWriteBufferLen,
-                 MOTOR_NAME ": stop command failed (err %d)\r\n", (int)st);
+                 "%s: stop command failed (err %d)\r\n",
+                 g_motor_configs[idx].name, (int)st);
     }
     return pdFALSE;
 }
