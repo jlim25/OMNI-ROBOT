@@ -56,8 +56,8 @@ volatile motor_state_t g_motor_state[MOTOR_MAX]    = { MOTOR_STATE_ABSENT };
 /* ── Shared UART bus mutex ────────────────────────────────────────── */
 static SemaphoreHandle_t servo_bus_mutex = NULL;
 
-/* ── Servo handle array ───────────────────────────────────────────── */
-static hiwonder_servo_t servo[MOTOR_MAX];
+/* ── Servo handle array (placed in CCMRAM to free main RAM) ──────── */
+static hiwonder_servo_t servo[MOTOR_MAX] __attribute__((section(".ccmram")));
 
 // #define ENABLE_PUBLISH_STATUS
 #define ENABLE_MOTOR_TEST   // Temporary: test motor comms without CAN
